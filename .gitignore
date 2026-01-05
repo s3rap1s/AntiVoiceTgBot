@@ -4,3 +4,5 @@ logs/
 core
 build/
 out/
+.vscode/
+.cache/
