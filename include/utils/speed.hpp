@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 struct SpeedInformation {
     double delay;
@@ -10,5 +9,4 @@ struct SpeedInformation {
     std::string speedStr;
 };
 
-const std::vector<SpeedInformation>& getSpeeds();
 SpeedInformation getSpeedInformation(size_t speed);

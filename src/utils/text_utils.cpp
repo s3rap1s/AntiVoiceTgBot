@@ -22,19 +22,7 @@ std::vector<std::string> splitText(const std::string& text) {
     return words;
 }
 
-std::string getInitialText(size_t speed, const std::string& text) {
-    std::stringstream ss(text);
-    std::string initialText;
-    std::string word;
-    size_t wordsToShow = getSpeedInformation(speed).wordsPerChunk;
-
-    while (ss >> word && wordsToShow-- > 0) {
-        initialText += word + " ";
-    }
-    return initialText;
-}
-
-std::vector<std::string> splitTextByWordsCount(const std::string& text, size_t wordsPerChunk) {
+std::vector<std::string> splitTextByWordsCount(const std::string& text, size_t wordsPerChunk, bool isAccumulated) {
     auto words = splitText(text);
     std::vector<std::string> chunks;
 
@@ -47,7 +35,7 @@ std::vector<std::string> splitTextByWordsCount(const std::string& text, size_t w
         size_t endIndex = std::min(currentWordIndex + wordsPerChunk, words.size());
 
         std::string chunk;
-        if (!chunks.empty())
+        if (isAccumulated && !chunks.empty())
             chunk = chunks.back() + " ";
 
         for (size_t i = currentWordIndex; i < endIndex; ++i) {
@@ -66,5 +54,19 @@ std::vector<std::string> splitTextByWordsCount(const std::string& text, size_t w
         chunks.push_back(chunk);
         currentWordIndex = endIndex;
     }
+    if (!isAccumulated)
+        chunks.push_back("*end*");
     return chunks;
+}
+
+std::string getInitialText(size_t speed, const std::string& text) {
+    std::stringstream ss(text);
+    std::string initialText;
+    std::string word;
+    size_t wordsToShow = getSpeedInformation(speed).wordsPerChunk;
+
+    while (ss >> word && wordsToShow-- > 0) {
+        initialText += word + " ";
+    }
+    return initialText;
 }

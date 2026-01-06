@@ -1,10 +1,14 @@
 #include "bot/event_handlers.hpp"
 
+#include "config.hpp"
 #include "core/gradual_editor.hpp"
 #include "utils/speed.hpp"
 #include "utils/text_utils.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <format>
+#include <string>
 
 void registerEventHandlers(TgBot::Bot& bot, UserStorage& userStorage, TaskManager& taskManager) {
     bot.getEvents().onAnyMessage([&bot, &userStorage](TgBot::Message::Ptr message) {
@@ -41,15 +45,25 @@ void registerEventHandlers(TgBot::Bot& bot, UserStorage& userStorage, TaskManage
 
         std::vector<TgBot::InlineQueryResult::Ptr> results;
         std::string text = query->query.empty() ? userStorage.getText(query->from->id) : query->query;
+        bool isAccumulated = text.starts_with(ACCUMULATE_COMMAND);
+        if (isAccumulated) {
+            auto firstNonSpace = std::find_if(
+                text.begin() + ACCUMULATE_COMMAND.size(), text.end(), [](char ch) { return !std::isspace(ch); });
+            text = std::string(firstNonSpace, text.end());
+        }
         std::string description;
-        if (text.empty()) {
-            description = "Use /save in PM to save text first";
+        std::string savedText = userStorage.getText(query->from->id);
+        if (text.empty() && savedText.empty()) {
+            description = "Use " + SAVE_COMMAND + " in PM to save text first";
             text = "Empty message";
         } else {
+            text = text.empty() ? savedText : text;
             description = "Query: " + text;
+            if (isAccumulated)
+                description = "(Accumulative mode) " + description;
         }
 
-        for (size_t speed = 0; speed < getSpeeds().size(); ++speed) {
+        for (size_t speed = 0; speed < SPEEDS.size(); ++speed) {
             auto config = getSpeedInformation(speed);
             auto result = std::make_shared<TgBot::InlineQueryResultArticle>();
             result->id = std::to_string(speed);
@@ -72,21 +86,27 @@ void registerEventHandlers(TgBot::Bot& bot, UserStorage& userStorage, TaskManage
         }
 
         size_t speed = toInteger(chosenQuery->resultId);
-        std::string fullText =
-            chosenQuery->query.empty() ? userStorage.getText(chosenQuery->from->id) : chosenQuery->query;
-        if (fullText.empty()) {
-            fullText = "Empty message";
+        const std::string savedText = userStorage.getText(chosenQuery->from->id);
+        std::string text = chosenQuery->query.empty() ? savedText : chosenQuery->query;
+        bool isAccumulated = text.starts_with(ACCUMULATE_COMMAND);
+        if (isAccumulated)
+            text = text.substr(ACCUMULATE_COMMAND.size());
+        if (text.empty()) {
+            text = "Empty message";
+            if (!savedText.empty())
+                text = savedText;
         }
 
         taskManager.startTask(chosenQuery->inlineMessageId,
                               std::jthread([&bot,
                                             inlineMessageId = chosenQuery->inlineMessageId,
-                                            fullText = std::move(fullText),
+                                            text = std::move(text),
                                             speed,
+                                            isAccumulated,
                                             notify = [&taskManager, id = chosenQuery->inlineMessageId](const auto&) {
                                                 taskManager.notifyFinished(id);
                                             }](std::stop_token stoken) {
-                                  graduallyUpdateMessage(bot, inlineMessageId, fullText, speed, notify);
+                                  graduallyUpdateMessage(bot, inlineMessageId, text, speed, isAccumulated, notify);
                               }));
     });
 
