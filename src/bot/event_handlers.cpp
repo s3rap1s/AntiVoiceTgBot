@@ -1,5 +1,6 @@
 #include "bot/event_handlers.hpp"
 
+#include "bot/common.hpp"
 #include "config.hpp"
 #include "core/gradual_editor.hpp"
 #include "core/message_storage.hpp"
@@ -10,6 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include <format>
+#include <ostream>
 #include <string>
 #include <thread>
 
@@ -40,42 +42,37 @@ void registerEventHandlers(TgBot::Bot& bot,
     });
 
     bot.getEvents().onInlineQuery([&bot, &userStorage](TgBot::InlineQuery::Ptr query) {
-        TgBot::InlineKeyboardMarkup::Ptr keyboard(new TgBot::InlineKeyboardMarkup);
-        {
-            TgBot::InlineKeyboardButton::Ptr button(new TgBot::InlineKeyboardButton);
-            button->text = "Why me? 😩";
-            button->callbackData = "why_me";
-            std::vector<TgBot::InlineKeyboardButton::Ptr> row{button};
-            keyboard->inlineKeyboard.push_back(row);
-        }
-
         std::vector<TgBot::InlineQueryResult::Ptr> results;
         std::string text = query->query;
+        if (query->query.empty()) {
+            return;
+        }
         bool isAccumulated = text.starts_with(ACCUMULATE_COMMAND);
         if (isAccumulated) {
             auto firstNonSpace = std::find_if(
                 text.begin() + ACCUMULATE_COMMAND.size(), text.end(), [](char ch) { return !std::isspace(ch); });
             text = std::string(firstNonSpace, text.end());
         }
+        std::cerr << "Text " << text;
         std::string description;
-        std::string savedText = userStorage.getText(query->from->id);
-        bool hasText = !text.empty() || !savedText.empty();
-        if (hasText) {
-            text = text.empty() ? savedText : text;
+        if (text.empty()) {
+            text = userStorage.getText(query->from->id);
+        }
+        std::cerr << "\ntext2 " << text << std::endl;
+        if (!text.empty()) {
             description = "Query: " + text;
             if (isAccumulated)
                 description = "(Accumulative mode) " + description;
             for (size_t speed = 0; speed < SPEEDS.size(); ++speed) {
-                auto config = getSpeedInformation(speed);
+                auto speedConfig = getSpeedInformation(speed);
                 auto result = std::make_shared<TgBot::InlineQueryResultArticle>();
                 result->id = std::to_string(speed);
-                result->title = config.title;
-                result->description = config.speedStr + " - " + description;
+                result->title = speedConfig.title;
+                result->description = speedConfig.speedStr + " - " + description;
                 auto inputContent = std::make_shared<TgBot::InputTextMessageContent>();
                 inputContent->messageText = getInitialText(speed, text);
                 result->inputMessageContent = inputContent;
-                result->replyMarkup = keyboard;
-
+                result->replyMarkup = createKeyboard();
                 results.push_back(result);
             }
             bot.getApi().answerInlineQuery(query->id, results, 1, true);
@@ -83,19 +80,17 @@ void registerEventHandlers(TgBot::Bot& bot,
     });
 
     bot.getEvents().onChosenInlineResult(
-        [&bot, &userStorage, &messageStorage, &taskManager](TgBot::ChosenInlineResult::Ptr chosenQuery) {
+        [&bot, &messageStorage, &taskManager](TgBot::ChosenInlineResult::Ptr chosenQuery) {
             if (chosenQuery->inlineMessageId.empty() || chosenQuery->resultId.empty()) {
                 return;
             }
-
             size_t speed = toInteger(chosenQuery->resultId);
-            const std::string savedText = userStorage.getText(chosenQuery->from->id);
-            std::string text = chosenQuery->query.empty() ? savedText : chosenQuery->query;
+            std::string text = chosenQuery->query;
             bool isAccumulated = text.starts_with(ACCUMULATE_COMMAND);
             if (isAccumulated)
                 text = text.substr(ACCUMULATE_COMMAND.size());
             InlineMessageId messageId = chosenQuery->inlineMessageId;
-            messageStorage.saveMessage(messageId, text, isAccumulated, speed);
+            messageStorage.saveMessage(messageId, chosenQuery->from->id, text, isAccumulated, speed);
             taskManager.startTask(messageId,
                                   std::jthread([&bot,
                                                 messageId,
@@ -109,15 +104,28 @@ void registerEventHandlers(TgBot::Bot& bot,
                                   }));
         });
 
-    bot.getEvents().onCallbackQuery([&bot, &messageStorage, &taskManager](TgBot::CallbackQuery::Ptr query) {
-        if (query->data == "why_me") {
-            bot.getApi().answerCallbackQuery(
-                query->id, "Feel the pain of listening to voice and video messages 😤🔊", true);
+    bot.getEvents().onCallbackQuery([&bot, &messageStorage, &userStorage, &taskManager](
+                                        TgBot::CallbackQuery::Ptr query) {
+        const std::string alias = bot.getApi().getMe()->username;
+        if (query->data == "show_full") {
+            auto result = messageStorage.getMessage(query->inlineMessageId);
+            if (result.has_value()) {
+                auto [text, speed, isAccumulated, owner] = result.value();
+                if ((userStorage.isPremium(query->from->id) && !userStorage.isPremium(owner)) ||
+                    owner == query->from->id)
+                    bot.getApi().answerCallbackQuery(query->id, result.value().text, true);
+                else {
+                    bot.getApi().answerCallbackQuery(
+                        query->id, "", true, std::format("t.me/{}?start={}", alias, "buyPrem"));
+                }
+            } else {
+                bot.getApi().answerCallbackQuery(query->id, result.error(), false);
+            }
         } else if (query->data == "relisten") {
             auto messageId = query->inlineMessageId;
             auto result = messageStorage.getMessage(messageId);
             if (result.has_value()) {
-                auto [text, isAccumulated, speed] = result.value();
+                auto [text, isAccumulated, speed, owner] = result.value();
                 taskManager.startTask(messageId,
                                       std::jthread([&bot,
                                                     messageId,

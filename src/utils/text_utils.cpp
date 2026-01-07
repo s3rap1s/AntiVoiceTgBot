@@ -1,6 +1,5 @@
 #include "utils/text_utils.hpp"
 
-#include "config.hpp"
 #include "utils/speed.hpp"
 
 #include <sstream>
@@ -45,17 +44,11 @@ std::vector<std::string> splitTextByWordsCount(const std::string& text, size_t w
             chunk += words[i];
         }
 
-        if (chunk.size() > MAX_MESSAGE_SIZE) {
-            chunk = chunk.substr(0, MAX_MESSAGE_SIZE - 3) + "...";
-            chunks.push_back(chunk);
-            break;
-        }
-
         chunks.push_back(chunk);
         currentWordIndex = endIndex;
     }
     if (!isAccumulated)
-        chunks.push_back("*end*");
+        chunks.push_back("<i>End of the message</i>");
     return chunks;
 }
 
