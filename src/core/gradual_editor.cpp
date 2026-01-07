@@ -20,8 +20,7 @@ void graduallyUpdateMessage(TgBot::Bot& bot,
     auto speedInfo = getSpeedInformation(speed);
     auto chunks = splitTextByWordsCount(fullText, speedInfo.wordsPerChunk, isAccumulated);
 
-    TgBot::InlineKeyboardMarkup::Ptr keyboard(new TgBot::InlineKeyboardMarkup);
-    keyboard = createKeyboard();
+    auto keyboard = createKeyboard();
 
     for (size_t i = 0; i < chunks.size(); ++i) {
         std::string displayText = chunks[i];

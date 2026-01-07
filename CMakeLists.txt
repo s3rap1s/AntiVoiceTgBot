@@ -27,5 +27,5 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(${PROJECT_NAME} PRIVATE TgBot::TgBot)
 
 target_compile_options(${PROJECT_NAME} PRIVATE
-    -Wall -Wextra -Wpedantic -Werror=format-security -Wno-unused-parameter
+    -Wall -Wextra -Wpedantic -Werror=format-security -Wno-unused-parameter -Wc++20-compat -Wregister -Wclass-memaccess -Wduplicated-cond
 )
