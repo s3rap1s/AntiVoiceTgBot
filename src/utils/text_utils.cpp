@@ -1,6 +1,6 @@
-#include "utils/text_utils.hpp"
+#include "text_utils.hpp"
 
-#include "utils/speed.hpp"
+#include "speed.hpp"
 
 #include <sstream>
 

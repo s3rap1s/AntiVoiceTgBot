@@ -1,4 +1,4 @@
-#include "bot/event_handlers.hpp"
+#include "event_handlers.hpp"
 
 #include "bot/common.hpp"
 #include "config.hpp"

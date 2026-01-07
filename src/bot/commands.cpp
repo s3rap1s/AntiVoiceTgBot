@@ -1,4 +1,4 @@
-#include "bot/commands.hpp"
+#include "commands.hpp"
 
 #include "config.hpp"
 
