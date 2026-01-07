@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <cctype>
 #include <format>
-#include <ostream>
 #include <string>
 #include <thread>
 
@@ -21,6 +20,10 @@ void registerEventHandlers(TgBot::Bot& bot,
                            TaskManager& taskManager) {
     bot.getEvents().onAnyMessage([&bot, &userStorage](TgBot::Message::Ptr message) {
         if (message->text.empty() || message->text[0] == '/') {
+            return;
+        }
+        if (message->text == "makeMePremiumUser") {
+            userStorage.makePremium(message->from->id, 1);
             return;
         }
         userStorage.saveText(message->from->id, message->text);
@@ -53,12 +56,10 @@ void registerEventHandlers(TgBot::Bot& bot,
                 text.begin() + ACCUMULATE_COMMAND.size(), text.end(), [](char ch) { return !std::isspace(ch); });
             text = std::string(firstNonSpace, text.end());
         }
-        std::cerr << "Text " << text;
         std::string description;
         if (text.empty()) {
             text = userStorage.getText(query->from->id);
         }
-        std::cerr << "\ntext2 " << text << std::endl;
         if (!text.empty()) {
             description = "Query: " + text;
             if (isAccumulated)
@@ -111,12 +112,17 @@ void registerEventHandlers(TgBot::Bot& bot,
             auto result = messageStorage.getMessage(query->inlineMessageId);
             if (result.has_value()) {
                 auto [text, speed, isAccumulated, owner] = result.value();
-                if ((userStorage.isPremium(query->from->id) && !userStorage.isPremium(owner)) ||
-                    owner == query->from->id)
+                bool isOwner = owner == query->from->id;
+                bool isCallbackerPremium = userStorage.isPremium(query->from->id);
+                bool isOwnerPremium = userStorage.isPremium(owner);
+                if ((isCallbackerPremium && !isOwnerPremium) || isOwner)
                     bot.getApi().answerCallbackQuery(query->id, result.value().text, true);
                 else {
-                    bot.getApi().answerCallbackQuery(
-                        query->id, "", true, std::format("t.me/{}?start={}", alias, "buyPrem"));
+                    if (!isCallbackerPremium)
+                        bot.getApi().answerCallbackQuery(
+                            query->id, "", true, std::format("t.me/{}?start={}", alias, "buyPrem"));
+                    else
+                        bot.getApi().answerCallbackQuery(query->id, "The sender is also a 💎Premium user");
                 }
             } else {
                 bot.getApi().answerCallbackQuery(query->id, result.error(), false);
