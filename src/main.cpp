@@ -1,6 +1,7 @@
 #include "bot/commands.hpp"
 #include "bot/event_handlers.hpp"
 #include "config.hpp"
+#include "core/message_storage.hpp"
 #include "core/task_manager.hpp"
 #include "core/user_storage.hpp"
 
@@ -14,9 +15,10 @@ int main() {
 
         UserStorage userStorage;
         TaskManager taskManager;
+        MessageStorage messageStorage;
 
         registerCommands(bot, userStorage);
-        registerEventHandlers(bot, userStorage, taskManager);
+        registerEventHandlers(bot, userStorage, messageStorage, taskManager);
 
         std::cout << "Bot started!" << std::endl;
         TgBot::TgLongPoll longPoll(bot);

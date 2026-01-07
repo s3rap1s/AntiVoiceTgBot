@@ -2,15 +2,21 @@
 
 #include "config.hpp"
 #include "core/gradual_editor.hpp"
+#include "core/message_storage.hpp"
 #include "utils/speed.hpp"
 #include "utils/text_utils.hpp"
+#include "utils/types.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <format>
 #include <string>
+#include <thread>
 
-void registerEventHandlers(TgBot::Bot& bot, UserStorage& userStorage, TaskManager& taskManager) {
+void registerEventHandlers(TgBot::Bot& bot,
+                           UserStorage& userStorage,
+                           MessageStorage& messageStorage,
+                           TaskManager& taskManager) {
     bot.getEvents().onAnyMessage([&bot, &userStorage](TgBot::Message::Ptr message) {
         if (message->text.empty() || message->text[0] == '/') {
             return;
@@ -44,7 +50,7 @@ void registerEventHandlers(TgBot::Bot& bot, UserStorage& userStorage, TaskManage
         }
 
         std::vector<TgBot::InlineQueryResult::Ptr> results;
-        std::string text = query->query.empty() ? userStorage.getText(query->from->id) : query->query;
+        std::string text = query->query;
         bool isAccumulated = text.starts_with(ACCUMULATE_COMMAND);
         if (isAccumulated) {
             auto firstNonSpace = std::find_if(
@@ -53,67 +59,79 @@ void registerEventHandlers(TgBot::Bot& bot, UserStorage& userStorage, TaskManage
         }
         std::string description;
         std::string savedText = userStorage.getText(query->from->id);
-        if (text.empty() && savedText.empty()) {
-            description = "Use " + SAVE_COMMAND + " in PM to save text first";
-            text = "Empty message";
-        } else {
+        bool hasText = !text.empty() || !savedText.empty();
+        if (hasText) {
             text = text.empty() ? savedText : text;
             description = "Query: " + text;
             if (isAccumulated)
                 description = "(Accumulative mode) " + description;
-        }
+            for (size_t speed = 0; speed < SPEEDS.size(); ++speed) {
+                auto config = getSpeedInformation(speed);
+                auto result = std::make_shared<TgBot::InlineQueryResultArticle>();
+                result->id = std::to_string(speed);
+                result->title = config.title;
+                result->description = config.speedStr + " - " + description;
+                auto inputContent = std::make_shared<TgBot::InputTextMessageContent>();
+                inputContent->messageText = getInitialText(speed, text);
+                result->inputMessageContent = inputContent;
+                result->replyMarkup = keyboard;
 
-        for (size_t speed = 0; speed < SPEEDS.size(); ++speed) {
-            auto config = getSpeedInformation(speed);
-            auto result = std::make_shared<TgBot::InlineQueryResultArticle>();
-            result->id = std::to_string(speed);
-            result->title = config.title;
-            result->description = config.speedStr + " - " + description;
-            auto inputContent = std::make_shared<TgBot::InputTextMessageContent>();
-            inputContent->messageText = getInitialText(speed, text);
-            result->inputMessageContent = inputContent;
-            result->replyMarkup = keyboard;
-
-            results.push_back(result);
+                results.push_back(result);
+            }
+            bot.getApi().answerInlineQuery(query->id, results, 1, true);
         }
-        bot.getApi().answerInlineQuery(query->id, results, 1, true);
     });
 
-    bot.getEvents().onChosenInlineResult([&bot, &userStorage, &taskManager](
-                                             TgBot::ChosenInlineResult::Ptr chosenQuery) {
-        if (chosenQuery->inlineMessageId.empty() || chosenQuery->resultId.empty()) {
-            return;
-        }
+    bot.getEvents().onChosenInlineResult(
+        [&bot, &userStorage, &messageStorage, &taskManager](TgBot::ChosenInlineResult::Ptr chosenQuery) {
+            if (chosenQuery->inlineMessageId.empty() || chosenQuery->resultId.empty()) {
+                return;
+            }
 
-        size_t speed = toInteger(chosenQuery->resultId);
-        const std::string savedText = userStorage.getText(chosenQuery->from->id);
-        std::string text = chosenQuery->query.empty() ? savedText : chosenQuery->query;
-        bool isAccumulated = text.starts_with(ACCUMULATE_COMMAND);
-        if (isAccumulated)
-            text = text.substr(ACCUMULATE_COMMAND.size());
-        if (text.empty()) {
-            text = "Empty message";
-            if (!savedText.empty())
-                text = savedText;
-        }
+            size_t speed = toInteger(chosenQuery->resultId);
+            const std::string savedText = userStorage.getText(chosenQuery->from->id);
+            std::string text = chosenQuery->query.empty() ? savedText : chosenQuery->query;
+            bool isAccumulated = text.starts_with(ACCUMULATE_COMMAND);
+            if (isAccumulated)
+                text = text.substr(ACCUMULATE_COMMAND.size());
+            InlineMessageId messageId = chosenQuery->inlineMessageId;
+            messageStorage.saveMessage(messageId, text, isAccumulated, speed);
+            taskManager.startTask(messageId,
+                                  std::jthread([&bot,
+                                                messageId,
+                                                text = std::move(text),
+                                                speed,
+                                                isAccumulated,
+                                                notify = [&taskManager, messageId](const auto&) {
+                                                    taskManager.notifyFinished(messageId);
+                                                }](std::stop_token stoken) {
+                                      graduallyUpdateMessage(bot, messageId, text, speed, isAccumulated, notify);
+                                  }));
+        });
 
-        taskManager.startTask(chosenQuery->inlineMessageId,
-                              std::jthread([&bot,
-                                            inlineMessageId = chosenQuery->inlineMessageId,
-                                            text = std::move(text),
-                                            speed,
-                                            isAccumulated,
-                                            notify = [&taskManager, id = chosenQuery->inlineMessageId](const auto&) {
-                                                taskManager.notifyFinished(id);
-                                            }](std::stop_token stoken) {
-                                  graduallyUpdateMessage(bot, inlineMessageId, text, speed, isAccumulated, notify);
-                              }));
-    });
-
-    bot.getEvents().onCallbackQuery([&bot](TgBot::CallbackQuery::Ptr query) {
+    bot.getEvents().onCallbackQuery([&bot, &messageStorage, &taskManager](TgBot::CallbackQuery::Ptr query) {
         if (query->data == "why_me") {
             bot.getApi().answerCallbackQuery(
-                query->id, "Feel the pain of listening to voice and video messages 🎤😤🔊", true);
+                query->id, "Feel the pain of listening to voice and video messages 😤🔊", true);
+        } else if (query->data == "relisten") {
+            auto messageId = query->inlineMessageId;
+            auto result = messageStorage.getMessage(messageId);
+            if (result.has_value()) {
+                auto [text, isAccumulated, speed] = result.value();
+                taskManager.startTask(messageId,
+                                      std::jthread([&bot,
+                                                    messageId,
+                                                    text = std::move(text),
+                                                    speed,
+                                                    isAccumulated,
+                                                    notify = [&taskManager, id = messageId](const auto&) {
+                                                        taskManager.notifyFinished(id);
+                                                    }](std::stop_token stoken) {
+                                          graduallyUpdateMessage(bot, messageId, text, speed, isAccumulated, notify);
+                                      }));
+            } else {
+                bot.getApi().answerCallbackQuery(query->id, result.error(), true);
+            }
         }
     });
 }
