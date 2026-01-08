@@ -86,14 +86,17 @@ void registerEventHandlers(TgBot::Bot& bot,
     });
 
     bot.getEvents().onChosenInlineResult(
-        [&bot, &messageStorage, &taskManager](TgBot::ChosenInlineResult::Ptr chosenQuery) {
+        [&bot, &userStorage, &messageStorage, &taskManager](TgBot::ChosenInlineResult::Ptr chosenQuery) {
             std::string queryId = chosenQuery->resultId;
             size_t separatorPos = queryId.find("-");
             size_t speed = toInteger(queryId.substr(0, separatorPos));
             size_t isAccumulated = queryId.substr(separatorPos + 1) == "true" ? true : false;
-            std::string_view text = chosenQuery->query;
+            std::string text = chosenQuery->query;
             if (isAccumulated)
                 text = text.substr(ACCUMULATE_COMMAND.size());
+            if (text.empty()) {
+                text = userStorage.getText(chosenQuery->from->id);
+            }
             const InlineMessageId messageId = chosenQuery->inlineMessageId;
             messageStorage.saveMessage(messageId, chosenQuery->from->id, text, isAccumulated, speed);
             taskManager.startTask(messageId,

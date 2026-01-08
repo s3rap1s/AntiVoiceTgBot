@@ -27,6 +27,9 @@ void graduallyUpdateMessage(TgBot::Bot& bot,
     auto keyboard = createKeyboard();
     if (!isAccumulated)
         chunks.push_back("<i>End of the message</i>");
+    else
+        messageStorage.forgetMessage(inlineMessageId);
+
     for (size_t i = 0; i < chunks.size(); ++i) {
         std::string displayText = chunks[i];
         if (i + 1 + (isAccumulated ? 0 : 1) < chunks.size())
@@ -51,7 +54,7 @@ void graduallyUpdateMessage(TgBot::Bot& bot,
             std::this_thread::sleep_for(std::chrono::duration<double>(speedInfo.delay));
         }
     }
-    messageStorage.forgetMessage(inlineMessageId);
+
     if (notifyFinished) {
         notifyFinished(inlineMessageId);
     }
