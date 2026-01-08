@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/message_storage.hpp"
 #include "utils/types.hpp"
 #include <functional>
 #include <string>
@@ -14,4 +15,5 @@ void graduallyUpdateMessage(TgBot::Bot& bot,
                             std::string_view fullText,
                             size_t speed,
                             bool isAccumulated,
+                            MessageStorage& messageStorage,
                             NotifyCallback notifyFinished) noexcept;

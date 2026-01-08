@@ -44,12 +44,9 @@ std::vector<std::string> splitTextByWordsCount(std::string_view text, size_t wor
             }
             chunk += words[i];
         }
-
-        chunks.push_back(chunk);
         currentWordIndex = endIndex;
+        chunks.push_back(chunk);
     }
-    if (!isAccumulated)
-        chunks.push_back("<i>End of the message</i>");
     return chunks;
 }
 
