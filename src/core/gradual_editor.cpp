@@ -3,8 +3,10 @@
 #include "bot/common.hpp"
 #include "utils/speed.hpp"
 #include "utils/text_utils.hpp"
+#include "utils/types.hpp"
 
 #include <iostream>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -12,8 +14,8 @@
 #include <tgbot/types/InlineKeyboardMarkup.h>
 
 void graduallyUpdateMessage(TgBot::Bot& bot,
-                            const std::string& inlineMessageId,
-                            const std::string& fullText,
+                            const InlineMessageId& inlineMessageId,
+                            std::string_view fullText,
                             size_t speed,
                             bool isAccumulated,
                             NotifyCallback notifyFinished) noexcept try {

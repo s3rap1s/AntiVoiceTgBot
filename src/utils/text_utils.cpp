@@ -3,17 +3,18 @@
 #include "speed.hpp"
 
 #include <sstream>
+#include <string_view>
 
-size_t toInteger(const std::string& str) {
-    std::stringstream ss(str);
+size_t toInteger(std::string_view str) {
+    std::stringstream ss((std::string(str)));
     size_t res{};
     ss >> res;
     return res;
 }
 
-std::vector<std::string> splitText(const std::string& text) {
+std::vector<std::string> splitText(std::string_view text) {
     std::vector<std::string> words;
-    std::stringstream ss(text);
+    std::stringstream ss((std::string(text)));
     std::string word;
     while (ss >> word) {
         words.push_back(word);
@@ -21,7 +22,7 @@ std::vector<std::string> splitText(const std::string& text) {
     return words;
 }
 
-std::vector<std::string> splitTextByWordsCount(const std::string& text, size_t wordsPerChunk, bool isAccumulated) {
+std::vector<std::string> splitTextByWordsCount(std::string_view text, size_t wordsPerChunk, bool isAccumulated) {
     auto words = splitText(text);
     std::vector<std::string> chunks;
 
@@ -52,8 +53,8 @@ std::vector<std::string> splitTextByWordsCount(const std::string& text, size_t w
     return chunks;
 }
 
-std::string getInitialText(size_t speed, const std::string& text) {
-    std::stringstream ss(text);
+std::string getInitialText(size_t speed, std::string_view text) {
+    std::stringstream ss((std::string(text)));
     std::string initialText;
     std::string word;
     size_t wordsToShow = getSpeedInformation(speed).wordsPerChunk;

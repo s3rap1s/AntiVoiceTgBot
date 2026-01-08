@@ -90,7 +90,7 @@ void registerEventHandlers(TgBot::Bot& bot,
             bool isAccumulated = text.starts_with(ACCUMULATE_COMMAND);
             if (isAccumulated)
                 text = text.substr(ACCUMULATE_COMMAND.size());
-            InlineMessageId messageId = chosenQuery->inlineMessageId;
+            const InlineMessageId messageId = chosenQuery->inlineMessageId;
             messageStorage.saveMessage(messageId, chosenQuery->from->id, text, isAccumulated, speed);
             taskManager.startTask(messageId,
                                   std::jthread([&bot,
@@ -128,7 +128,7 @@ void registerEventHandlers(TgBot::Bot& bot,
                 bot.getApi().answerCallbackQuery(query->id, result.error(), false);
             }
         } else if (query->data == "relisten") {
-            auto messageId = query->inlineMessageId;
+            const InlineMessageId messageId = query->inlineMessageId;
             auto result = messageStorage.getMessage(messageId);
             if (result.has_value()) {
                 auto [text, isAccumulated, speed, owner] = result.value();

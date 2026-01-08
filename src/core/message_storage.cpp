@@ -8,12 +8,12 @@
 #include <string>
 
 void MessageStorage::saveMessage(
-    InlineMessageId& id, UserId userId, const std::string& text, bool isAccumulated, size_t speed) {
+    const InlineMessageId& id, UserId userId, const std::string_view text, bool isAccumulated, size_t speed) {
     std::unique_lock lock(mutex);
-    storage[id] = {text, isAccumulated, speed, userId};
+    storage[id] = {std::string(text), isAccumulated, speed, userId};
 }
 
-std::expected<MessageStorage::MessageInfo, std::string> MessageStorage::getMessage(InlineMessageId& id) const {
+std::expected<MessageStorage::MessageInfo, std::string> MessageStorage::getMessage(const InlineMessageId& id) const {
     std::shared_lock lock(mutex);
     auto it = storage.find(id);
     if (it == storage.end())
@@ -21,7 +21,7 @@ std::expected<MessageStorage::MessageInfo, std::string> MessageStorage::getMessa
     return it->second;
 }
 
-void MessageStorage::forgetMessage(InlineMessageId& id) {
+void MessageStorage::forgetMessage(const InlineMessageId& id) {
     std::unique_lock lock(mutex);
     storage.erase(id);
 }
